@@ -1,0 +1,65 @@
+version: "16.1"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        GO_VERSION: 1.24.3
+    container_name: app
+    restart: always
+    ports:
+      - "8080:8080"
+    env_file:
+      - config.env
+    depends_on:
+      - migrate
+      # - db
+          # condition: service_healthy
+    networks:
+      - app-network
+
+  db:
+    env_file:
+      - config.env
+    image: postgres
+    container_name: postgres
+    restart: always
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d test_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.goose
+    image: pressly/goose:v3.15.1
+    env_file:
+      - config.env
+    # command: 
+    #   - "sh" 
+    #   - "-c" 
+    #   - "until goose -dir /migrations postgres $${DB_Source} status; do sleep 2; done; goose -dir /migrations postgres $${DB_Source} up"
+    volumes:
+      - ./migrations:/migrations
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - app-network
+
+volumes:
+  db-data:
+
+networks:
+  app-network:
+    driver: bridge
